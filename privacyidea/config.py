@@ -6,7 +6,6 @@ import random
 import string
 log = logging.getLogger(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
-basedir = "/".join(basedir.split("/")[:-1]) + "/"
 
 
 pubtest_key = b"""-----BEGIN PUBLIC KEY-----

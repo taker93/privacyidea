@@ -553,7 +553,7 @@ myApp.controller("configController", function ($scope, $location,
     };
 
     // TODO: This information needs to be fetched from the server
-    $scope.availableResolverTypes = ['passwdresolver', 'ldapresolver', 'sqlresolver', 'scimresolver', 'httpresolver'];
+    $scope.availableResolverTypes = ['passwdresolver', 'ldapresolver', 'sqlresolver', 'scimresolver', 'httpresolver', 'keycloakresolver'];
     // TODO: This information needs to be fetched from the server
     $scope.availableMachineResolverTypes = ['hosts', 'ldap'];
     // TODO: This information needs to be fetched from the server
@@ -1031,6 +1031,53 @@ myApp.controller("ScimResolverController", function ($scope, ConfigFactory,
     };
 });
 
+myApp.controller("KeycloakResolverController", function (
+  $scope,
+  ConfigFactory,
+  $state,
+  $stateParams,
+  inform,
+  gettextCatalog
+) {
+  /*
+    Authserver, Resourceserver, Client, Secret
+    */
+  $scope.params = { type: "keycloakresolver" };
+  $scope.result = {};
+  $scope.resolvername = $stateParams.resolvername;
+
+  if ($scope.resolvername) {
+    /* If we have a resolvername, we do an Edit
+        and we need to fill all the $scope.params */
+    ConfigFactory.getResolver($scope.resolvername, function (data) {
+      var resolver = data.result.value[$scope.resolvername];
+      //debug: console.log(resolver);
+      $scope.params = resolver.data;
+      $scope.params.type = "keycloakresolver";
+    });
+  }
+
+  $scope.setKeycloakResolver = function () {
+    ConfigFactory.setResolver($scope.resolvername, $scope.params, function (
+      data
+    ) {
+      $scope.set_result = data.result.value;
+      $scope.getResolvers();
+      $state.go("config.resolvers.list");
+    });
+  };
+
+  $scope.testResolver = function () {
+    ConfigFactory.testResolver($scope.params, function (data) {
+      if (data.result.value === true) {
+        inform.add(data.detail.description, { type: "success", ttl: 10000 });
+      } else {
+        inform.add(data.detail.description, { type: "danger", ttl: 10000 });
+      }
+    });
+  };
+});
+
 myApp.controller("SqlResolverController", function ($scope, ConfigFactory,
                                                     $state, $stateParams,
                                                     inform, gettextCatalog) {
@@ -1132,8 +1179,8 @@ myApp.controller("HTTPResolverController", function(
   };
 
   $scope.$watch(
-    'params.hasSpecialErrorHandler;', 
-    function (incomingValue) { 
+    'params.hasSpecialErrorHandler;',
+    function (incomingValue) {
         const value = (incomingValue + '').toLowerCase()
         $scope.params.hasSpecialErrorHandler = value === 'true'
     });
