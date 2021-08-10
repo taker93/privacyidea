@@ -10,7 +10,6 @@ import logging
 import traceback
 
 from .UserIdResolver import UserIdResolver
-import json
 import yaml
 import requests
 import base64
@@ -20,7 +19,7 @@ from privacyidea.lib.utils import to_bytes, to_unicode, convert_column_to_unicod
 log = logging.getLogger(__name__)
 
 
-class IdResolver(UserIdResolver):
+class KeycloakIdResolver(UserIdResolver):
 
     def __init__(self):
         self.keycloak_server = ''
@@ -116,7 +115,6 @@ class IdResolver(UserIdResolver):
 
         ret = []
 
-        # TODO: search dict is not used at the moment
         res = {}
         if self.access_token:
             res = self._search_users(self.keycloak_server, self.keycloak_realm, self.access_token, "")
