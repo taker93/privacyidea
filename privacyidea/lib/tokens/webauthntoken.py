@@ -33,7 +33,7 @@ from privacyidea.lib.crypto import geturandom
 from privacyidea.lib.decorators import check_token_locked
 from privacyidea.lib.error import ParameterError, RegistrationError, PolicyError
 from privacyidea.lib.token import get_tokens
-from privacyidea.lib.tokenclass import TokenClass
+from privacyidea.lib.tokenclass import TokenClass, CLIENTMODE, ROLLOUTSTATE
 from privacyidea.lib.tokens.u2f import x509name_to_string
 from privacyidea.lib.tokens.webauthn import (COSE_ALGORITHM, webauthn_b64_encode, WebAuthnRegistrationResponse,
                                              ATTESTATION_REQUIREMENT_LEVEL, webauthn_b64_decode,
@@ -63,7 +63,7 @@ WebAuthn tokens can be either
  * registered by administrators for users or
  * registered by the users themselves.
 
-Beware the WebAuthn tokens can only be used if the privacyIDEA server and
+Be aware that WebAuthn tokens can only be used if the privacyIDEA server and
 the applications and services the user needs to access all reside under the
 same domain or subdomains thereof.
 
@@ -78,8 +78,8 @@ The enrollment/registering can be completely performed within privacyIDEA.
 But if you want to enroll the WebAuthn token via the REST API you need to do
 it in two steps:
 
-1. Step
-~~~~~~~
+Step 1
+~~~~~~
 
 .. sourcecode:: http
 
@@ -95,8 +95,8 @@ and a message to display to the user. It will also pass some additional options
 regarding timeout, which authenticators are acceptable, and what key types are
 acceptable to the server.
 
-2. Step
-~~~~~~~
+Step 2
+~~~~~~
 
 .. sourcecode:: http
 
@@ -116,6 +116,8 @@ WebAuthn authenticator. *description* is an optional description string for
 the new token.
 
 You need to call the javascript function
+
+.. sourcecode:: javascript
 
     navigator
         .credentials
@@ -348,6 +350,8 @@ not provided, the client may also pick a sensible default. Please note that the
 nonce will be a binary, encoded using the web-safe base64 algorithm specified by
 WebAuthn, and needs to be decoded and passed as Uint8Array.
 
+.. sourcecode:: javascript
+
     const publicKeyCredentialRequestOptions = {
         challenge: <nonce>,
         allowCredentials: [{
@@ -504,6 +508,8 @@ class WebAuthnTokenClass(TokenClass):
     """
     The WebAuthn Token implementation.
     """
+
+    client_mode = CLIENTMODE.WEBAUTHN
 
     @staticmethod
     def _get_challenge_validity_time():
@@ -747,7 +753,6 @@ class WebAuthnTokenClass(TokenClass):
         TokenClass.__init__(self, db_token)
         self.set_type(self.get_class_type())
         self.hKeyRequired = False
-        self.init_step = 1
 
     def _get_message(self, options):
         challengetext = getParam(options, "{0!s}_{1!s}".format(self.get_class_type(), ACTION.CHALLENGETEXT), optional)
@@ -758,7 +763,7 @@ class WebAuthnTokenClass(TokenClass):
             user_id=self.token.serial,
             user_name=user.login,
             user_display_name=str(user),
-            icon_url=IMAGES.get(self.token.description.lower().split()[0], ""),
+            icon_url=IMAGES.get(self.token.description.lower().split()[0], "") if self.token.description else "",
             credential_id=self.decrypt_otpkey(),
             public_key=webauthn_b64_encode(binascii.unhexlify(self.get_tokeninfo(WEBAUTHNINFO.PUB_KEY))),
             sign_count=self.get_otp_count(),
@@ -798,13 +803,16 @@ class WebAuthnTokenClass(TokenClass):
         transaction_id = getParam(param, "transaction_id", optional)
         reg_data = getParam(param, "regdata", optional)
         client_data = getParam(param, "clientdata", optional)
+        automatic_description = DEFAULT_DESCRIPTION
 
-        if reg_data and client_data:
-            self.init_step = 2
-
+        if not (reg_data and client_data):
+            self.token.rollout_state = ROLLOUTSTATE.CLIENTWAIT
+            # Set the description in the first enrollment step
+            if "description" in param:
+                self.set_description(getParam(param, "description", default=""))
+        elif reg_data and client_data and self.token.rollout_state == ROLLOUTSTATE.CLIENTWAIT:
             serial = self.token.serial
             registration_client_extensions = getParam(param, "registrationclientextensions", optional)
-            description = getParam(param, "description", optional)
 
             rp_id = getParam(param, WEBAUTHNACTION.RELYING_PARTY_ID, required)
             uv_req = getParam(param, WEBAUTHNACTION.USER_VERIFICATION_REQUIREMENT, optional)
@@ -882,19 +890,23 @@ class WebAuthnTokenClass(TokenClass):
                 self.add_tokeninfo(WEBAUTHNINFO.ATTESTATION_SERIAL,
                                    attestation_cert.get_serial_number())
 
-                if not description:
-                    cn = web_authn_credential.attestation_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-                    description = cn[0].value if len(cn) else None
+                cn = web_authn_credential.attestation_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+                automatic_description = cn[0].value if len(cn) else None
 
-            self.set_description(description or DEFAULT_DESCRIPTION)
+            # If no description has already been set, set the automatic description or the
+            # description given in the 2nd request
+            if not self.token.description:
+                self.set_description(getParam(param, "description", default=automatic_description))
 
             # Delete all challenges. We are still in enrollment, so there
             # *should* be only one, but it can't hurt to be thorough here.
             for challengeobject in challengeobject_list:
                 challengeobject.delete()
             self.challenge_janitor()
+            # Reset clientwait rollout_state
+            self.token.rollout_state = ""
         else:
-            self.set_description("WebAuthn initialization")
+            raise ParameterError("regdata and or clientdata provided but token not in clientwait rollout_state.")
 
     @log_with(log)
     def get_init_detail(self, params=None, user=None):
@@ -914,8 +926,8 @@ class WebAuthnTokenClass(TokenClass):
         :return: The response detail returned to the client.
         :rtype: dict
         """
-
-        if self.init_step == 1:
+        # get_init_details runs after "update" method. So in the first step clientwait has already been set
+        if self.token.rollout_state == ROLLOUTSTATE.CLIENTWAIT:
             response_detail = TokenClass.get_init_detail(self, params, user)
 
             if not params:
@@ -997,7 +1009,7 @@ class WebAuthnTokenClass(TokenClass):
             self.add_tokeninfo(WEBAUTHNINFO.RELYING_PARTY_NAME,
                                public_key_credential_creation_options["rp"]["name"])
 
-        elif self.init_step == 2:
+        elif self.token.rollout_state == "":
             # This is the second step of the init request. The registration
             # ceremony has been successfully performed.
             response_detail = {
@@ -1055,7 +1067,7 @@ class WebAuthnTokenClass(TokenClass):
         :type transactionid: basestring
         :param options: The request context parameters and data
         :type options: dict
-        :return: Success status, message, transaction id and response details
+        :return: Success status, message, transaction id and reply_dict
         :rtype: (bool, basestring, basestring, dict)
         """
 
@@ -1112,13 +1124,12 @@ class WebAuthnTokenClass(TokenClass):
                              required)
         ).assertion_dict
 
-        response_details = {
-            "webAuthnSignRequest": public_key_credential_request_options,
-            "hideResponseInput": True,
-            "img": user.icon_url
-        }
+        reply_dict = {"attributes": {"webAuthnSignRequest": public_key_credential_request_options,
+                                     "hideResponseInput": self.client_mode != CLIENTMODE.INTERACTIVE,
+                                     "img": user.icon_url},
+                      "image": user.icon_url}
 
-        return True, message, db_challenge.transaction_id, response_details
+        return True, message, db_challenge.transaction_id, reply_dict
     
     @check_token_locked
     def check_otp(self, otpval, counter=None, window=None, options=None):
