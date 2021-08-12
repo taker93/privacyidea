@@ -1,0 +1,30 @@
+version: "2.1"
+
+services:
+  privacyidea:
+    image: lbd/test/privacyidea:latest
+    ports:
+      - "80:80"
+    environment:
+      - SECRET_KEY=supersecretkey
+      - PI_PEPPER=secretworduseforadminencrypt
+      - PI_PAGE_TITLE=lbd-pivacyIDEA
+      - PI_ADMIN_USER=admin
+      - PI_ADMIN_PASSWORD=admin
+      #- SQLALCHEMY_DATABASE_URI = 'pymysql://test1:test1@mysql/test1'
+    volumes:
+      - ./data:/data/privacyidea
+
+  #mysql:
+  #  container_name: privacyidea-mysql
+  #  image: mysql:8.0.16
+  #  command: --default-authentication-plugin=mysql_native_password
+  #  environment:
+  #    MYSQL_ROOT_PASSWORD: test1
+  #    MYSQL_PASSWORD: test1
+  #    MYSQL_USER: test1
+  #    MYSQL_DATABASE: test1
+  #  security_opt:
+  #    - seccomp:unconfined
+  #  volumes:
+  #    - ./data/mysql:/var/lib/mysql

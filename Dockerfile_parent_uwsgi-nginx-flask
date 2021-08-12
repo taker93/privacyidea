@@ -1,0 +1,30 @@
+FROM tiangolo/uwsgi-nginx-flask:python3.8
+
+LABEL maintainer="Lucas Kurz <lucas_marius.kurz@statistik.rlp.de>"
+
+ENV PI_SKIP_BOOTSTRAP=false \
+    DB_VENDOR=sqlite \
+    PI_VERSION=master
+
+# COPY PI configuration
+COPY ./docker/configs/config.py /etc/privacyidea/pi.cfg
+
+#COPY ../requirements.txt requirements.txt
+
+# Install Supervisord
+RUN set -xe; \
+    apt-get update && apt-get install -y ca-certificates; \
+    pip install supervisor uwsgi pymysql-sa PyMySQL;\
+    pip install -r https://raw.githubusercontent.com/taker93/privacyidea/${PI_VERSION}/requirements.txt; \
+    pip install git+https://github.com/taker93/privacyidea.git@${PI_VERSION}; \
+    #pip install -r requirements.txt; \
+    apt-get remove --purge --auto-remove -y ca-certificates; \
+    rm -rf /var/lib/apt/lists/*; \
+    rm -rf ~/.cache/pip
+
+#COPY . /application/privacyidea
+#RUN pip install /application/privacyidea
+
+COPY ./docker/configs/app /app
+
+VOLUME [ "/data/privacyidea" ]
