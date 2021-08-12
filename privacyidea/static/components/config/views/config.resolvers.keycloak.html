@@ -1,20 +1,14 @@
 <div ng-controller="KeycloakResolverController">
-  <h2 class="form-signin-heading" ng-show="resolvername" translate>
-    Edit Keycloak Resolver {{ resolvername }}
-  </h2>
-  <h2 class="form-signin-heading" ng-hide="resolvername" translate>
-    Create a new Keycloak Resolver
-  </h2>
+    <h2 class="form-signin-heading" ng-show="resolvername" translate>
+        Edit Keycloak Resolver {{ resolvername }}
+    </h2>
+    <h2 class="form-signin-heading" ng-hide="resolvername" translate>
+        Create a new Keycloak Resolver
+    </h2>
 
-  <form
-    name="formResolverAddKeycloak"
-    role="form"
-    validate
-    class="form-horizontal"
-  >
-    <div class="form-group">
-      <label for="resolvername" class="col-sm-3 control-label" translate
-        >Resolver name</label
+    <form name="formResolverAddKeycloak" role="form" validate class="form-horizontal">
+        <div class="form-group">
+            <label for="resolvername" class="col-sm-3 control-label" translate>Resolver name</label
       >
 
       <div class="col-sm-9">
@@ -40,7 +34,7 @@
         <input
           name="keycloakserver"
           class="form-control"
-          ng-model="params.Keycloakserver"
+          ng-model="params.keycloak_server"
           required
           placeholder="http://localhost:8080/"
         />
@@ -56,7 +50,7 @@
         <input
           name="realm"
           class="form-control"
-          ng-model="params.Realm"
+          ng-model="params.keycloak_realm"
           required
           placeholder="REALM"
         />
@@ -72,7 +66,7 @@
         <input
           name="client"
           class="form-control"
-          ng-model="params.Client"
+          ng-model="params.auth_client"
           required
           placeholder="hostname"
         />
@@ -88,7 +82,7 @@
         <input
           name="secret"
           class="form-control"
-          ng-model="params.Secret"
+          ng-model="params.auth_secret"
           required
           placeholder="d81c31e4-9f65-4805-b5ba-6edf0761f954"
         />
@@ -106,26 +100,15 @@
           ng-click="showResult=false"
         ></span>
       </label>
-    </div>
+        </div>
 
-    <div class="text-center">
-      <button
-        ng-click="testResolver()"
-        ng-disabled="formResolverAddKeycloak.$invalid"
-        class="btn btn-success"
-        translate
-      >
+        <div class="text-center">
+            <button ng-click="testResolver()" ng-disabled="formResolverAddKeycloak.$invalid" class="btn btn-success" translate>
         Test Keycloak Resolver
       </button>
-      <button
-        ng-click="setKeycloakResolver()"
-        ng-show="checkRight('resolverwrite')"
-        ng-disabled="formResolverAddKeycloak.$invalid"
-        class="btn btn-primary"
-        translate
-      >
+            <button ng-click="setKeycloakResolver()" ng-show="checkRight('resolverwrite')" ng-disabled="formResolverAddKeycloak.$invalid" class="btn btn-primary" translate>
         Save resolver
       </button>
-    </div>
-  </form>
+        </div>
+    </form>
 </div>

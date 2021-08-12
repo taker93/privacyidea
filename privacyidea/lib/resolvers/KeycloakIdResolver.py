@@ -21,22 +21,17 @@ log = logging.getLogger(__name__)
 
 class KeycloakIdResolver(UserIdResolver):
 
+    fields = {
+        "keycloak_server": 1,
+        "keycloak_realm": 1,
+        "auth_client": 1,
+        "auth_secret": 1,
+        "access_token": 1,
+    }
+
     def __init__(self):
-        self.keycloak_server = ''
-        self.keycloak_realm = ''
-        self.auth_client = ''
-        self.auth_secret = ''
-        self.access_token = None
-
-    def checkPass(self, uid, password):
-        """
-        This function checks the password for a given uid.
-        - returns true in case of success
-        -         false if password does not match
-
-        """
-        # TODO: Implement password checking with Keycloak
-        return False
+        super(KeycloakIdResolver, self).__init__()
+        self.config = {}
 
     def getUserInfo(self, userid):
         """
@@ -45,9 +40,9 @@ class KeycloakIdResolver(UserIdResolver):
         ret = {}
         # The Keycloak ID is always /Users/ID
         # Alas, we can not map the ID to any other attribute
-        res = self._get_user(self.keycloak_server,
-                             self.keycloak_realm,
-                             self.access_token,
+        res = self._get_user(self.config['keycloak_server'],
+                             self.config['self.keycloak_realm'],
+                             self.config['self.access_token'],
                              userid)
         user = res
         ret = self._fill_user_schema(user)
@@ -66,7 +61,7 @@ class KeycloakIdResolver(UserIdResolver):
         ret['email'] = user.get("email")
         if user.get("attributes", {}):
             attributes = user.get("attributes", {});
-            if attributes.get("mobile")[0]:
+            if attributes.get("mobile") and attributes.get("mobile")[0]:
                 ret['mobile'] = user.get("attributes").get("mobile")[0]
 
         return ret
@@ -91,7 +86,7 @@ class KeycloakIdResolver(UserIdResolver):
         """
         res = {}
         if self.access_token:
-            res = self._search_users(self.keycloak_server, self.keycloak_realm, self.access_token,
+            res = self._search_users(self.config['keycloak_server'], self.config['keycloak_realm'], self.config['access_token'],
                                      {'username': loginName})
             num = len(res)
             desc = "Found {0!s} users".format(num)
@@ -116,8 +111,8 @@ class KeycloakIdResolver(UserIdResolver):
         ret = []
 
         res = {}
-        if self.access_token:
-            res = self._search_users(self.keycloak_server, self.keycloak_realm, self.access_token, "")
+        if self.config['access_token']:
+            res = self._search_users(self.config['keycloak_server'], self.config['keycloak_realm'], self.config['access_token'], "")
 
         for user in res:
             ret_user = self._fill_user_schema(user)
@@ -130,7 +125,7 @@ class KeycloakIdResolver(UserIdResolver):
         """
         :return: the resolver identifier string, empty string if not exist
         """
-        return self.keycloak_server
+        return self.config['keycloak_server'] if 'keycloak_server' in self.config else ''
 
     @staticmethod
     def getResolverClassType():
@@ -138,11 +133,11 @@ class KeycloakIdResolver(UserIdResolver):
 
     @staticmethod
     def getResolverDescriptor():
-        return IdResolver.getResolverClassDescriptor()
+        return KeycloakIdResolver.getResolverClassDescriptor()
 
     @staticmethod
     def getResolverType():
-        return IdResolver.getResolverClassType()
+        return KeycloakIdResolver.getResolverClassType()
 
     @classmethod
     def getResolverClassDescriptor(cls):
@@ -177,11 +172,11 @@ class KeycloakIdResolver(UserIdResolver):
         :type config: dict
         :return: the resolver instance
         """
-        self.keycloak_server = config.get('Keycloakserver')
-        self.keycloak_realm = config.get('Realm')
-        self.auth_client = config.get('Client')
-        self.auth_secret = config.get('Secret')
-        self.create_keycloak_object()
+        self.config = config
+        self.config['access_token'] = self.get_access_token(self.config['keycloak_server'],
+                                                  self.config['keycloak_realm'],
+                                                  self.config['auth_client'],
+                                                  self.config['auth_secret'])
         return self
 
     @classmethod
@@ -201,13 +196,12 @@ class KeycloakIdResolver(UserIdResolver):
         success = False
 
         try:
-            access_token = cls.get_access_token(str(param.get("Keycloakserver")),
-                                                param.get("Realm"),
-                                                param.get("Client"),
-                                                param.get("Secret"))
-            content = cls._search_users(param.get("Keycloakserver"), param.get("Realm"), access_token, "")
-            num = len(content)
-            desc = "Found {0!s} users".format(num)
+            access_token = cls.get_access_token(str(param.get("keycloak_server")),
+                                                param.get("keycloak_realm"),
+                                                param.get("auth_client"),
+                                                param.get("auth_secret"))
+            content = cls._search_users(param.get("keycloak_server"), param.get("keycloak_realm"), access_token, { "max": 10 })
+            desc = "Found {0!s} users.".format(len(content))
             success = True
         except Exception as exx:
             log.error("Failed to retrieve users: {0!s}".format(exx))
@@ -222,7 +216,7 @@ class KeycloakIdResolver(UserIdResolver):
         :param params: Additional http parameters added to the URL
         :type params: dictionary
         """
-        params = params or {}
+        params = params or { "max": 20 }
         headers = {'Authorization': "Bearer {0}".format(access_token),
                    'content-type': 'application/json'}
         url = '{0}/auth/admin/realms/{1}/users?{2}'.format(keycloak_server, keycloak_realm, urlencode(params))
@@ -290,8 +284,3 @@ class KeycloakIdResolver(UserIdResolver):
         access_token = yaml.safe_load(resp.content).get('access_token')
         return access_token
 
-    def create_keycloak_object(self):
-        self.access_token = self.get_access_token(self.keycloak_server,
-                                                  self.keycloak_realm,
-                                                  self.auth_client,
-                                                  self.auth_secret)

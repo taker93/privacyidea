@@ -1,6 +1,7 @@
 .project
 .pydevproject
 .settings/
+.svn/
 *.sqlite
 !tests/testdata/testuser.sqlite
 !tests/testdata/audit.sqlite
@@ -33,3 +34,4 @@ __pycache__/
 /public.pem
 /private.pem
 dist/
+data/
