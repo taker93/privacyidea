@@ -35,3 +35,4 @@ __pycache__/
 /private.pem
 dist/
 data/
+.DS_Store

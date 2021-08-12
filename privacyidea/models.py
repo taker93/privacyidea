@@ -107,10 +107,10 @@ def save_config_timestamp(invalidate_config=True):
     """
     c1 = Config.query.filter_by(Key=PRIVACYIDEA_TIMESTAMP).first()
     if c1:
-        c1.Value = datetime.now().strftime("%S")
+        c1.Value = datetime.now().strftime("%s")
     else:
         new_timestamp = Config(PRIVACYIDEA_TIMESTAMP,
-                               datetime.now().strftime("%S"),
+                               datetime.now().strftime("%s"),
                                Description="config timestamp. last changed.")
         db.session.add(new_timestamp)
     if invalidate_config:

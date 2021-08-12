@@ -63,12 +63,12 @@ angular.module('privacyideaApp.configStates', ['ui.router', 'privacyideaApp.vers
                     url: "/httpresolver/:resolvername",
                     templateUrl: configpath + "config.resolvers.http.html" + versioningSuffixProviderProvider.$get().$get()
                 })
-                .state("config.resolvers.addkeycloakresolver", {
-                    url: "/keycloak",
+                .state('config.resolvers.addkeycloakresolver', {
+                    url: "/keycloakresolver",
                     templateUrl: configpath + "config.resolvers.keycloak.html" + versioningSuffixProviderProvider.$get().$get()
                 })
-                .state("config.resolvers.editkeycloakresolver", {
-                    url: "/keycloak/:resolvername",
+                .state('config.resolvers.editkeycloakresolver', {
+                    url: "/keycloakresolver/:resolvername",
                     templateUrl: configpath + "config.resolvers.keycloak.html" + versioningSuffixProviderProvider.$get().$get()
                 })
                 .state('config.resolvers.addldapresolver', {

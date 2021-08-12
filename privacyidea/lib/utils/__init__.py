@@ -748,7 +748,7 @@ def reload_db(timestamp, db_ts):
     """
     internal_timestamp = ''
     if timestamp:
-        internal_timestamp = timestamp.strftime("%S")
+        internal_timestamp = timestamp.strftime("%s")
     rdb = False
     # Reason to reload
     if db_ts and db_ts.Value.startswith("2016-"):
