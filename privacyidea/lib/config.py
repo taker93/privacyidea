@@ -25,7 +25,27 @@
 # You should have received a copy of the GNU Affero General Public
 # License along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-__doc__="""The config module takes care about storing server configuration in
+from six import with_metaclass, string_types
+import datetime
+import importlib
+from .utils import reload_db, is_true
+from .caconnectors.localca import BaseCAConnector
+from .machines.base import BaseMachineResolver
+from .resolvers.UserIdResolver import UserIdResolver
+from .crypto import decryptPassword
+from .crypto import encryptPassword
+from privacyidea.lib.utils.export import (register_import, register_export)
+from privacyidea.lib.utils import to_list
+from privacyidea.lib.framework import get_request_local_store, get_app_config_value, get_app_local_store
+from ..models import (Config, db, Resolver, Realm, PRIVACYIDEA_TIMESTAMP,
+                      save_config_timestamp, Policy, EventHandler)
+from .log import log_with
+import threading
+import inspect
+import logging
+import sys
+import copy
+__doc__ = """The config module takes care about storing server configuration in
 the Config database table.
 
 It provides functions to retrieve (get) and and set configuration.
@@ -33,28 +53,6 @@ It provides functions to retrieve (get) and and set configuration.
 The code is tested in tests/test_lib_config
 """
 
-import copy
-import sys
-import logging
-import inspect
-import threading
-
-
-from .log import log_with
-from ..models import (Config, db, Resolver, Realm, PRIVACYIDEA_TIMESTAMP,
-                      save_config_timestamp, Policy, EventHandler)
-from privacyidea.lib.framework import get_request_local_store, get_app_config_value, get_app_local_store
-from privacyidea.lib.utils import to_list
-from privacyidea.lib.utils.export import (register_import, register_export)
-from .crypto import encryptPassword
-from .crypto import decryptPassword
-from .resolvers.UserIdResolver import UserIdResolver
-from .machines.base import BaseMachineResolver
-from .caconnectors.localca import BaseCAConnector
-from .utils import reload_db, is_true
-import importlib
-import datetime
-from six import with_metaclass, string_types
 
 log = logging.getLogger(__name__)
 
@@ -81,6 +79,7 @@ class SharedConfigClass(object):
     Instead, it must use ``reload_and_clone()`` to retrieve
     a ``LocalConfigClass`` object which holds a local configuration snapshot.
     """
+
     def __init__(self):
         self._config_lock = threading.Lock()
         self.config = {}
@@ -99,7 +98,7 @@ class SharedConfigClass(object):
         """
         check_reload_config = get_app_config_value("PI_CHECK_RELOAD_CONFIG", 0)
         if not self.timestamp or \
-            self.timestamp + datetime.timedelta(seconds=check_reload_config) < datetime.datetime.now():
+                self.timestamp + datetime.timedelta(seconds=check_reload_config) < datetime.datetime.now():
             db_ts = Config.query.filter_by(Key=PRIVACYIDEA_TIMESTAMP).first()
             if reload_db(self.timestamp, db_ts):
                 log.debug(u"Reloading shared config from database")
@@ -193,6 +192,7 @@ class LocalConfigClass(object):
     It will be cloned from the shared config object at the beginning of the
     request and is supposed to stay alive and unchanged during the request.
     """
+
     def __init__(self, config, resolver, realm, default_realm, policies, events, timestamp):
         self.config = config
         self.resolver = resolver
@@ -266,7 +266,7 @@ class SYSCONF(object):
     RESET_FAILCOUNTER_ON_PIN_ONLY = "ResetFailcounterOnPIN"
 
 
-#@cache.cached(key_prefix="allConfig")
+# @cache.cached(key_prefix="allConfig")
 def get_privacyidea_config():
     # timestamp = Config.query.filter_by(Key="privacyidea.timestamp").first()
     return get_from_config()
@@ -313,7 +313,8 @@ def ensure_no_config_object():
     """
     store = get_request_local_store()
     if 'config_object' in store:
-        log.warning(u"Request-local store already contains config object, even though it should not")
+        log.warning(
+            u"Request-local store already contains config object, even though it should not")
         del store['config_object']
 
 
@@ -331,7 +332,7 @@ def get_config_object():
 
 
 @log_with(log)
-#@cache.cached(key_prefix="singleConfig")
+# @cache.cached(key_prefix="singleConfig")
 def get_from_config(key=None, default=None, role="admin", return_bool=False):
     """
     :param key: A key to retrieve
@@ -351,7 +352,7 @@ def get_from_config(key=None, default=None, role="admin", return_bool=False):
                                     return_bool=return_bool)
 
 
-#@cache.cached(key_prefix="resolver")
+# @cache.cached(key_prefix="resolver")
 def get_resolver_types():
     """
     Return a simple list of the type names of the resolvers.
@@ -374,7 +375,7 @@ def get_caconnector_types():
     return ["local"]
 
 
-#@cache.cached(key_prefix="classes")
+# @cache.cached(key_prefix="classes")
 def get_resolver_classes():
     """
     Returns a list of the available resolver classes like:
@@ -393,7 +394,7 @@ def get_resolver_classes():
     return list(this.config["pi_resolver_classes"].values())
 
 
-#@cache.cached(key_prefix="classes")
+# @cache.cached(key_prefix="classes")
 def get_token_class_dict():
     """
     get a dictionary of the token classes and a dictionary of the
@@ -421,19 +422,21 @@ def get_token_class_dict():
             obj = getattr(module, name)
             # We must not process imported classes!
             if (inspect.isclass(obj) and issubclass(obj, TokenClass) and
-                        obj.__module__ == module.__name__):
+                    obj.__module__ == module.__name__):
                 try:
-                    class_name = "{0!s}.{1!s}".format(module.__name__, obj.__name__)
+                    class_name = "{0!s}.{1!s}".format(
+                        module.__name__, obj.__name__)
                     tokenclass_dict[class_name] = obj
                     if hasattr(obj, 'get_class_type'):
                         tokentype_dict[class_name] = obj.get_class_type()
                 except Exception as e:  # pragma: no cover
-                    log.error("error constructing token_class_dict: {0!r}".format(e))
+                    log.error(
+                        "error constructing token_class_dict: {0!r}".format(e))
 
     return tokenclass_dict, tokentype_dict
 
 
-#@cache.cached(key_prefix="classes")
+# @cache.cached(key_prefix="classes")
 def get_token_class(tokentype):
     """
     This takes a token type like "hotp" and returns a class
@@ -454,7 +457,7 @@ def get_token_class(tokentype):
     return tokenclass
 
 
-#@cache.cached(key_prefix="types")
+# @cache.cached(key_prefix="types")
 def get_token_types():
     """
     Return a simple list of the type names of the tokens.
@@ -469,7 +472,7 @@ def get_token_types():
     return list(this.config["pi_token_types"].values())
 
 
-#@cache.cached(key_prefix="prefix")
+# @cache.cached(key_prefix="prefix")
 def get_token_prefix(tokentype=None, default=None):
     """
     Return the token prefix for a tokentype as it is defined in the
@@ -484,7 +487,8 @@ def get_token_prefix(tokentype=None, default=None):
     """
     prefix_dict = {}
     for tokenclass in get_token_classes():
-        prefix_dict[tokenclass.get_class_type()] = tokenclass.get_class_prefix()
+        prefix_dict[tokenclass.get_class_type(
+        )] = tokenclass.get_class_prefix()
 
     if tokentype:
         ret = prefix_dict.get(tokentype, default)
@@ -493,7 +497,7 @@ def get_token_prefix(tokentype=None, default=None):
     return ret
 
 
-#@cache.cached(key_prefix="classes")
+# @cache.cached(key_prefix="classes")
 def get_token_classes():
     """
     Returns a list of the available token classes like:
@@ -535,7 +539,8 @@ def get_machine_resolver_class_dict():
                     (issubclass(obj, BaseMachineResolver)) and \
                     (obj != BaseMachineResolver):
                 try:
-                    class_name = "{0!s}.{1!s}".format(module.__name__, obj.__name__)
+                    class_name = "{0!s}.{1!s}".format(
+                        module.__name__, obj.__name__)
                     resolverclass_dict[class_name] = obj
                     resolvertype_dict[class_name] = obj.type
 
@@ -570,7 +575,8 @@ def get_caconnector_class_dict():
                     (issubclass(obj, BaseCAConnector)) and \
                     (obj != BaseCAConnector):
                 try:
-                    class_name = "{0!s}.{1!s}".format(module.__name__, obj.__name__)
+                    class_name = "{0!s}.{1!s}".format(
+                        module.__name__, obj.__name__)
                     class_dict[class_name] = obj
                     type_dict[class_name] = obj.connector_type
 
@@ -581,12 +587,12 @@ def get_caconnector_class_dict():
     return class_dict, type_dict
 
 
-#@cache.cached(key_prefix="resolver")
+# @cache.cached(key_prefix="resolver")
 def get_resolver_class_dict():
     """
     get a dictionary of the resolver classes and a dictionary
     of the resolver types:
-    
+
     ({'privacyidea.lib.resolvers.PasswdIdResolver.IdResolver':
       <class 'privacyidea.lib.resolvers.PasswdIdResolver.IdResolver'>,
       'privacyidea.lib.resolvers.PasswdIdResolver.UserIdResolver':
@@ -610,11 +616,12 @@ def get_resolver_class_dict():
             # There are other classes like HMAC in the lib.tokens module,
             # which we do not want to load.
             if inspect.isclass(obj) and (issubclass(obj, UserIdResolver) or
-                                             obj == UserIdResolver):
+                                         obj == UserIdResolver):
                 # We must not process imported classes!
                 # if obj.__module__ == module.__name__:
                 try:
-                    class_name = "{0!s}.{1!s}".format(module.__name__, obj.__name__)
+                    class_name = "{0!s}.{1!s}".format(
+                        module.__name__, obj.__name__)
                     resolverclass_dict[class_name] = obj
 
                     prefix = class_name.split('.')[1]
@@ -624,13 +631,14 @@ def get_resolver_class_dict():
                     resolverprefix_dict[class_name] = prefix
 
                 except Exception as e:  # pragma: no cover
-                    log.error("error constructing resolverclass_list: {0!r}".format(e))
+                    log.error(
+                        "error constructing resolverclass_list: {0!r}".format(e))
 
     return resolverclass_dict, resolverprefix_dict
 
 
 @log_with(log)
-#@cache.cached(key_prefix="resolver")
+# @cache.cached(key_prefix="resolver")
 def get_resolver_list():
     """
     get the list of the module names of the resolvers like
@@ -646,7 +654,6 @@ def get_resolver_list():
     module_list.add("privacyidea.lib.resolvers.SCIMIdResolver")
     module_list.add("privacyidea.lib.resolvers.SQLIdResolver")
     module_list.add("privacyidea.lib.resolvers.HTTPResolver")
-    module_list.add("privacyidea.lib.resolvers.KeycloakIdResolver")
 
     # Dynamic Resolver modules
     # TODO: Migration
@@ -668,7 +675,7 @@ def get_resolver_list():
 
 
 @log_with(log)
-#@cache.memoize(1)
+# @cache.memoize(1)
 def get_machine_resolver_class_list():
     """
     get the list of the class names of the machine resolvers like
@@ -687,7 +694,7 @@ def get_machine_resolver_class_list():
 
 
 @log_with(log)
-#@cache.cached(key_prefix="token")
+# @cache.cached(key_prefix="token")
 def get_token_list():
     """
     get the list of the tokens
@@ -733,7 +740,7 @@ def get_token_list():
 
 
 @log_with(log)
-#@cache.cached(key_prefix="modules")
+# @cache.cached(key_prefix="modules")
 def get_token_module_list():
     """
     return the list of modules of the available token classes
@@ -750,23 +757,24 @@ def get_token_module_list():
             continue
 
         # load all token class implementations
-        #if mod_name in sys.modules:
+        # if mod_name in sys.modules:
         #    module = sys.modules[mod_name]
         #    log.debug('module %s loaded' % (mod_name))
         #    modules.append(module)
-        #else:
+        # else:
         try:
             log.debug("import module: {0!s}".format(mod_name))
             module = importlib.import_module(mod_name)
             modules.append(module)
         except Exception as exx:  # pragma: no cover
             module = None
-            log.warning('unable to load token module : {0!r} ({1!r})'.format(mod_name, exx))
+            log.warning(
+                'unable to load token module : {0!r} ({1!r})'.format(mod_name, exx))
 
     return modules
 
 
-#@cache.cached(key_prefix="modules")
+# @cache.cached(key_prefix="modules")
 def get_resolver_module_list():
     """
     return the list of modules of the available resolver classes
@@ -790,7 +798,8 @@ def get_resolver_module_list():
 
         except Exception as exx:  # pragma: no cover
             module = None
-            log.warning('unable to load resolver module : {0!r} ({1!r})'.format(mod_name, exx))
+            log.warning(
+                'unable to load resolver module : {0!r} ({1!r})'.format(mod_name, exx))
 
         if module is not None:
             modules.append(module)
@@ -798,7 +807,7 @@ def get_resolver_module_list():
     return modules
 
 
-#@cache.cached(key_prefix="module")
+# @cache.cached(key_prefix="module")
 def get_caconnector_module_list():
     """
     return the list of modules of the available CA connector classes
@@ -818,7 +827,8 @@ def get_caconnector_module_list():
 
         except Exception as exx:  # pragma: no cover
             module = None
-            log.warning('unable to load ca connector module : {0!r} ({1!r})'.format(mod_name, exx))
+            log.warning(
+                'unable to load ca connector module : {0!r} ({1!r})'.format(mod_name, exx))
 
         if module is not None:
             modules.append(module)
@@ -826,7 +836,7 @@ def get_caconnector_module_list():
     return modules
 
 
-#@cache.cached(key_prefix="module")
+# @cache.cached(key_prefix="module")
 def get_machine_resolver_module_list():
     """
     return the list of modules of the available machines resolver classes
@@ -848,7 +858,8 @@ def get_machine_resolver_module_list():
 
         except Exception as exx:  # pragma: no cover
             module = None
-            log.warning('unable to load machine resolver module : {0!r} ({1!r})'.format(module_name, exx))
+            log.warning('unable to load machine resolver module : {0!r} ({1!r})'.format(
+                module_name, exx))
 
         if module is not None:
             modules.append(module)
@@ -889,11 +900,11 @@ def set_privacyidea_config(key, value, typ="", desc=""):
         #new_entry = Config(key, value, typ, desc)
         # ``save`` will call ``save_config_timestamp`` for us
         Config(key, value, typ, desc).save()
-        #db.session.add(new_entry)
+        # db.session.add(new_entry)
         ret = "insert"
 
-    #save_config_timestamp()
-    #db.session.commit()
+    # save_config_timestamp()
+    # db.session.commit()
     return ret
 
 
@@ -905,7 +916,7 @@ def delete_privacyidea_config(key):
     # We need to check, if the value already exist
     if Config.query.filter_by(Key=key).first().delete():
         ret = True
-    #if q:
+    # if q:
     #    db.session.delete(q)
     #    db.session.commit()
     #    ret = True
@@ -913,7 +924,7 @@ def delete_privacyidea_config(key):
     return ret
 
 
-#@cache.cached(key_prefix="pin")
+# @cache.cached(key_prefix="pin")
 def get_inc_fail_count_on_false_pin():
     """
     Return if the Failcounter should be increased if only tokens
@@ -926,7 +937,7 @@ def get_inc_fail_count_on_false_pin():
     return r
 
 
-#@cache.cached(key_prefix="pin")
+# @cache.cached(key_prefix="pin")
 def get_prepend_pin():
     """
     Get the status of the "PrependPin" Config
@@ -948,7 +959,7 @@ def set_prepend_pin(prepend=True):
 
 
 def return_saml_attributes():
-    r = get_from_config(key="ReturnSamlAttributes", default= False,
+    r = get_from_config(key="ReturnSamlAttributes", default=False,
                         return_bool=True)
     return r
 
@@ -966,7 +977,8 @@ def get_privacyidea_node():
     If it does not exist, the PI_AUDIT_SERVERNAME is used.
     :return: the distinct node name
     """
-    node_name = get_app_config_value("PI_NODE", get_app_config_value("PI_AUDIT_SERVERNAME", "localnode"))
+    node_name = get_app_config_value(
+        "PI_NODE", get_app_config_value("PI_AUDIT_SERVERNAME", "localnode"))
     return node_name
 
 

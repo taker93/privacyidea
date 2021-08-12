@@ -38,6 +38,7 @@
 import binascii
 import six
 import logging
+import time
 from datetime import datetime, timedelta
 
 from dateutil.tz import tzutc
@@ -86,12 +87,12 @@ class MethodsMixin(object):
     This class mixes in some common Class table functions like
     delete and save
     """
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
         return self.id
-    
+
     def delete(self):
         ret = self.id
         db.session.delete(self)
@@ -107,10 +108,12 @@ def save_config_timestamp(invalidate_config=True):
     """
     c1 = Config.query.filter_by(Key=PRIVACYIDEA_TIMESTAMP).first()
     if c1:
-        c1.Value = datetime.now().strftime("%s")
+        c1.Value = str(int(time.time()))
+        # datetime.now().strftime("%s")
     else:
         new_timestamp = Config(PRIVACYIDEA_TIMESTAMP,
-                               datetime.now().strftime("%s"),
+                               # datetime.now().strftime("%s"),
+                               str(int(time.time())),
                                Description="config timestamp. last changed.")
         db.session.add(new_timestamp)
     if invalidate_config:
@@ -240,7 +243,8 @@ class Token(MethodsMixin, db.Model):
             if tr:
                 db.session.add(tr)
 
-            to = TokenOwner(token_id=token_id, user_id=userid, resolver=resolver, realm_id=realm_id)
+            to = TokenOwner(token_id=token_id, user_id=userid,
+                            resolver=resolver, realm_id=realm_id)
             if to:
                 db.session.add(to)
 
@@ -250,7 +254,7 @@ class Token(MethodsMixin, db.Model):
     @property
     def first_owner(self):
         return self.owners.first()
-            
+
     @log_with(log)
     def delete(self):
         # some DBs (eg. DB2) run in deadlock, if the TokenRealm entry
@@ -329,7 +333,7 @@ class Token(MethodsMixin, db.Model):
                     Tr = TokenRealm(token_id=self.id, realm_id=r.id)
                     db.session.add(Tr)
         db.session.commit()
-        
+
     def get_realms(self):
         """
         return a list of the assigned realms
@@ -480,7 +484,7 @@ class Token(MethodsMixin, db.Model):
     def set_so_pin(self, soPin):
         """
         For smartcards this sets the security officer pin of the token
-        
+
         :rtype : None
         """
         iv = geturandom(16)
@@ -669,7 +673,7 @@ class TokenInfo(MethodsMixin, db.Model):
                       {'mysql_row_format': 'DYNAMIC'})
 
     def __init__(self, token_id, Key, Value,
-                 Type= None,
+                 Type=None,
                  Description=None):
         """
         Create a new tokeninfo for a given token_id
@@ -722,7 +726,8 @@ class CustomUserAttribute(MethodsMixin, db.Model):
           with remnants of attributes.
     """
     __tablename__ = 'customuserattribute'
-    id = db.Column(db.Integer(), Sequence("customuserattribute_seq"), primary_key=True)
+    id = db.Column(db.Integer(), Sequence(
+        "customuserattribute_seq"), primary_key=True)
     user_id = db.Column(db.Unicode(320), default=u'', index=True)
     resolver = db.Column(db.Unicode(120), default=u'', index=True)
     realm_id = db.Column(db.Integer(), db.ForeignKey('realm.id'))
@@ -870,11 +875,11 @@ class Realm(TimestampMethodsMixin, db.Model):
     resolver_list = db.relationship('ResolverRealm',
                                     lazy='select',
                                     foreign_keys='ResolverRealm.realm_id')
-    
+
     @log_with(log)
     def __init__(self, realm):
         self.name = realm
-        
+
     def delete(self):
         ret = self.id
         # delete all TokenRealm
@@ -905,7 +910,7 @@ class CAConnector(MethodsMixin, db.Model):
     name = db.Column(db.Unicode(255), default=u"",
                      unique=True, nullable=False)
     catype = db.Column(db.Unicode(255), default=u"",
-                      nullable=False)
+                       nullable=False)
     caconfig = db.relationship('CAConnectorConfig',
                                lazy='dynamic',
                                backref='caconnector')
@@ -939,7 +944,7 @@ class CAConnectorConfig(db.Model):
     __tablename__ = 'caconnectorconfig'
     id = db.Column(db.Integer, Sequence("caconfig_seq"), primary_key=True)
     caconnector_id = db.Column(db.Integer,
-                            db.ForeignKey('caconnector.id'))
+                               db.ForeignKey('caconnector.id'))
     Key = db.Column(db.Unicode(255), nullable=False)
     Value = db.Column(db.Unicode(2000), default=u'')
     Type = db.Column(db.Unicode(2000), default=u'')
@@ -957,9 +962,9 @@ class CAConnectorConfig(db.Model):
             self.caconnector_id = caconnector_id
         elif caconnector:
             self.caconnector_id = CAConnector.query\
-                                       .filter_by(name=caconnector)\
-                                       .first()\
-                                       .id
+                .filter_by(name=caconnector)\
+                .first()\
+                .id
         self.Key = Key
         self.Value = convert_column_to_unicode(Value)
         self.Type = Type
@@ -967,7 +972,7 @@ class CAConnectorConfig(db.Model):
 
     def save(self):
         c = CAConnectorConfig.query.filter_by(caconnector_id=self.caconnector_id,
-                                           Key=self.Key).first()
+                                              Key=self.Key).first()
         if c is None:
             # create a new one
             db.session.add(self)
@@ -976,11 +981,11 @@ class CAConnectorConfig(db.Model):
         else:
             # update
             CAConnectorConfig.query.filter_by(caconnector_id=self.caconnector_id,
-                                           Key=self.Key
-                                           ).update({'Value': self.Value,
-                                                     'Type': self.Type,
-                                                     'Descrip'
-                                                     'tion': self.Description})
+                                              Key=self.Key
+                                              ).update({'Value': self.Value,
+                                                        'Type': self.Type,
+                                                        'Descrip'
+                                                        'tion': self.Description})
             ret = c.id
         db.session.commit()
         return ret
@@ -1007,11 +1012,11 @@ class Resolver(TimestampMethodsMixin, db.Model):
     realm_list = db.relationship('ResolverRealm',
                                  lazy='select',
                                  foreign_keys='ResolverRealm.resolver_id')
-    
+
     def __init__(self, name, rtype):
         self.name = name
         self.rtype = rtype
-        
+
     def delete(self):
         ret = self.id
         # delete all ResolverConfig
@@ -1292,7 +1297,7 @@ class PasswordReset(MethodsMixin, db.Model):
         self.email = email
         self.timestamp = timestamp or datetime.now()
         self.expiration = expiration or datetime.now() + \
-                                        timedelta(seconds=expiration_seconds)
+            timedelta(seconds=expiration_seconds)
 
 
 @six.python_2_unicode_compatible
@@ -1307,7 +1312,8 @@ class Challenge(MethodsMixin, db.Model):
     transaction_id = db.Column(db.Unicode(64), nullable=False, index=True)
     data = db.Column(db.Unicode(512), default=u'')
     challenge = db.Column(db.Unicode(512), default=u'')
-    session = db.Column(db.Unicode(512), default=u'', quote=True, name="session")
+    session = db.Column(db.Unicode(512), default=u'',
+                        quote=True, name="session")
     # The token serial number
     serial = db.Column(db.Unicode(40), default=u'', index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow())
@@ -1372,7 +1378,7 @@ class Challenge(MethodsMixin, db.Model):
 
     def set_challenge(self, challenge):
         self.challenge = convert_column_to_unicode(challenge)
-    
+
     def get_challenge(self):
         return self.challenge
 
@@ -1396,7 +1402,7 @@ class Challenge(MethodsMixin, db.Model):
     def get(self, timestamp=False):
         """
         return a dictionary of all vars in the challenge class
-        
+
         :param timestamp: if true, the timestamp will given in a readable
                           format
                           2014-11-29 21:56:43.057293
@@ -1480,7 +1486,7 @@ class Policy(TimestampMethodsMixin, db.Model):
                                  # Likewise, whenever a Policy object is deleted, its conditions are also
                                  # deleted (delete). Conditions without a policy are deleted (delete-orphan).
                                  cascade="save-update, merge, delete, delete-orphan")
-    
+
     def __init__(self, name,
                  active=True, scope="", action="", realm="", adminrealm="", adminuser="",
                  resolver="", user="", client="", time="", pinode="", priority=1,
@@ -1581,8 +1587,10 @@ class Policy(TimestampMethodsMixin, db.Model):
 class PolicyCondition(MethodsMixin, db.Model):
     __tablename__ = "policycondition"
 
-    id = db.Column(db.Integer, Sequence("policycondition_seq"), primary_key=True)
-    policy_id = db.Column(db.Integer, db.ForeignKey('policy.id'), nullable=False)
+    id = db.Column(db.Integer, Sequence(
+        "policycondition_seq"), primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey(
+        'policy.id'), nullable=False)
     section = db.Column(db.Unicode(255), nullable=False)
     # We use upper-case "Key" and "Value" to prevent conflicts with databases
     # that do not support "key" or "value" as column names
@@ -1648,6 +1656,7 @@ class MachineToken(MethodsMixin, db.Model):
             self.token_id = Token.query.filter_by(serial=serial).first().id
         self.machine_id = machine_id
         self.application = application
+
 
 """
 class MachineUser(db.Model):
@@ -1732,8 +1741,8 @@ class MachineTokenOptions(db.Model):
 
     def __init__(self, machinetoken_id, key, value):
         log.debug("setting {0!r} to {1!r} for MachineToken {2!s}".format(key,
-                                                            value,
-                                                            machinetoken_id))
+                                                                         value,
+                                                                         machinetoken_id))
         self.machinetoken_id = machinetoken_id
         self.mt_key = convert_column_to_unicode(key)
         self.mt_value = convert_column_to_unicode(value)
@@ -1832,7 +1841,8 @@ class EventHandler(MethodsMixin, db.Model):
             EventHandlerOption(eventhandler_id=self.id, Key=k, Value=v).save()
         conditions = conditions or {}
         for k, v in conditions.items():
-            EventHandlerCondition(eventhandler_id=self.id, Key=k, Value=v).save()
+            EventHandlerCondition(eventhandler_id=self.id,
+                                  Key=k, Value=v).save()
         # Delete event handler conditions, that ar not used anymore.
         ev_conditions = EventHandlerCondition.query.filter_by(
             eventhandler_id=self.id).all()
@@ -2059,9 +2069,9 @@ class MachineResolverConfig(db.Model):
             self.resolver_id = resolver_id
         elif resolver:
             self.resolver_id = MachineResolver.query\
-                                .filter_by(name=resolver)\
-                                .first()\
-                                .id
+                .filter_by(name=resolver)\
+                .first()\
+                .id
         self.Key = Key
         self.Value = convert_column_to_unicode(Value)
         self.Type = Type
@@ -2189,7 +2199,8 @@ class SMSGateway(MethodsMixin, db.Model):
         # add the options and headers to the SMS Gateway
         for typ, vals in opts.items():
             for k, v in vals.items():
-                SMSGatewayOption(gateway_id=self.id, Key=k, Value=v, Type=typ).save()
+                SMSGatewayOption(gateway_id=self.id, Key=k,
+                                 Value=v, Type=typ).save()
 
     def save(self):
         if self.id is None:
@@ -2281,7 +2292,6 @@ class SMSGatewayOption(MethodsMixin, db.Model):
                       {'mysql_row_format': 'DYNAMIC'})
 
     def __init__(self, gateway_id, Key, Value, Type=None):
-
         """
         Create a new gateway_option for the gateway_id
         """
@@ -2295,7 +2305,7 @@ class SMSGatewayOption(MethodsMixin, db.Model):
         # See, if there is this option or header for this this gateway
         # The first match takes precedence
         go = SMSGatewayOption.query.filter_by(gateway_id=self.gateway_id,
-                                               Key=self.Key, Type=self.Type).first()
+                                              Key=self.Key, Type=self.Type).first()
         if go is None:
             # create a new one
             db.session.add(self)
@@ -2304,9 +2314,9 @@ class SMSGatewayOption(MethodsMixin, db.Model):
         else:
             # update
             SMSGatewayOption.query.filter_by(gateway_id=self.gateway_id,
-                                              Key=self.Key, Type=self.Type
-                                              ).update({'Value': self.Value,
-                                                        'Type': self.Type})
+                                             Key=self.Key, Type=self.Type
+                                             ).update({'Value': self.Value,
+                                                       'Type': self.Type})
             ret = go.id
         db.session.commit()
         return ret
@@ -2426,7 +2436,7 @@ class SMTPServer(MethodsMixin, db.Model):
     """
     __tablename__ = 'smtpserver'
     __table_args__ = {'mysql_row_format': 'DYNAMIC'}
-    id = db.Column(db.Integer, Sequence("smtpserver_seq"),primary_key=True)
+    id = db.Column(db.Integer, Sequence("smtpserver_seq"), primary_key=True)
     # This is a name to refer to
     identifier = db.Column(db.Unicode(255), nullable=False)
     # This is the FQDN or the IP address
@@ -2525,7 +2535,8 @@ class ClientApplication(MethodsMixin, db.Model):
             values = {"lastseen": self.lastseen}
             if self.hostname is not None:
                 values["hostname"] = self.hostname
-            ClientApplication.query.filter(ClientApplication.id == clientapp.id).update(values)
+            ClientApplication.query.filter(
+                ClientApplication.id == clientapp.id).update(values)
         db.session.commit()
 
     def __repr__(self):
@@ -2648,7 +2659,7 @@ class EventCounter(db.Model):
         self.save()
 
 
-### Audit
+# Audit
 
 audit_column_length = {"signature": 620,
                        "action": 50,
@@ -2739,7 +2750,7 @@ class Audit(MethodsMixin, db.Model):
         self.policies = convert_column_to_unicode(policies)
 
 
-### User Cache
+# User Cache
 
 class UserCache(MethodsMixin, db.Model):
     __tablename__ = 'usercache'
@@ -2785,7 +2796,7 @@ class AuthCache(MethodsMixin, db.Model):
         self.last_auth = last_auth if last_auth else self.first_auth
 
 
-### Periodic Tasks
+# Periodic Tasks
 
 class PeriodicTask(MethodsMixin, db.Model):
     """
@@ -2840,12 +2851,14 @@ class PeriodicTask(MethodsMixin, db.Model):
         for k, v in options.items():
             PeriodicTaskOption(periodictask_id=self.id, key=k, value=v)
         # remove all leftover options
-        all_options = PeriodicTaskOption.query.filter_by(periodictask_id=self.id).all()
+        all_options = PeriodicTaskOption.query.filter_by(
+            periodictask_id=self.id).all()
         for option in all_options:
             if option.key not in options:
                 PeriodicTaskOption.query.filter_by(id=option.id).delete()
         # remove all leftover last_runs
-        all_last_runs = PeriodicTaskLastRun.query.filter_by(periodictask_id=self.id).all()
+        all_last_runs = PeriodicTaskLastRun.query.filter_by(
+            periodictask_id=self.id).all()
         for last_run in all_last_runs:
             if last_run.node not in node_list:
                 PeriodicTaskLastRun.query.filter_by(id=last_run.id).delete()
@@ -2905,8 +2918,10 @@ class PeriodicTask(MethodsMixin, db.Model):
     def delete(self):
         ret = self.id
         # delete all PeriodicTaskOptions and PeriodicTaskLastRuns before deleting myself
-        db.session.query(PeriodicTaskOption).filter_by(periodictask_id=ret).delete()
-        db.session.query(PeriodicTaskLastRun).filter_by(periodictask_id=ret).delete()
+        db.session.query(PeriodicTaskOption).filter_by(
+            periodictask_id=ret).delete()
+        db.session.query(PeriodicTaskLastRun).filter_by(
+            periodictask_id=ret).delete()
         db.session.delete(self)
         db.session.commit()
         return ret
@@ -3056,5 +3071,4 @@ class MonitoringStats(MethodsMixin, db.Model):
         self.timestamp = timestamp
         self.stats_key = key
         self.stats_value = value
-        #self.save()
-
+        # self.save()
