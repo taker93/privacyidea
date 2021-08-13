@@ -654,6 +654,7 @@ def get_resolver_list():
     module_list.add("privacyidea.lib.resolvers.SCIMIdResolver")
     module_list.add("privacyidea.lib.resolvers.SQLIdResolver")
     module_list.add("privacyidea.lib.resolvers.HTTPResolver")
+    module_list.add("privacyidea.lib.resolvers.KeycloakResolver")
 
     # Dynamic Resolver modules
     # TODO: Migration
