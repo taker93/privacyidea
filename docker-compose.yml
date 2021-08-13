@@ -2,7 +2,9 @@ version: "2.1"
 
 services:
   privacyidea:
-    image: lbd/test/privacyidea:latest
+    build:
+      context: .
+    image: privacyidea:latest
     ports:
       - "80:80"
     depends_on:

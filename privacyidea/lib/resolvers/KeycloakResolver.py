@@ -70,8 +70,8 @@ class KeycloakResolver(UserIdResolver):
         # The Keycloak ID is always /Users/ID
         # Alas, we can not map the ID to any other attribute
         res = self._get_user(self.config['keycloak_server'],
-                             self.config['self.keycloak_realm'],
-                             self.config['self.access_token'],
+                             self.config['keycloak_realm'],
+                             self.config['access_token'],
                              userid)
         user = res
         ret = self._fill_user_schema(user)
@@ -114,7 +114,7 @@ class KeycloakResolver(UserIdResolver):
         :rtype: str
         """
         res = {}
-        if self.access_token:
+        if self.config['access_token']:
             res = self._search_users(self.config['keycloak_server'], self.config['keycloak_realm'], self.config['access_token'],
                                      {'username': loginName})
             num = len(res)
@@ -140,9 +140,19 @@ class KeycloakResolver(UserIdResolver):
         ret = []
 
         res = {}
+        params = {"max": 15}
+
+        if searchDict:
+            if searchDict.get('username'):
+                params['username'] = searchDict.get(
+                    'username').replace('*', '')
+            if searchDict.get('email'):
+                params['email'] = searchDict.get(
+                    'email').replace('*', '')
+
         if self.config['access_token']:
             res = self._search_users(
-                self.config['keycloak_server'], self.config['keycloak_realm'], self.config['access_token'], "")
+                self.config['keycloak_server'], self.config['keycloak_realm'], self.config['access_token'], params)
 
         for user in res:
             ret_user = self._fill_user_schema(user)
